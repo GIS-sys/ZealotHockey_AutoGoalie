@@ -4,3 +4,5 @@ pyautogui
 
 Pillow
 tk
+
+keyboard

@@ -98,6 +98,7 @@ class TrackerPuck:
         while self.running:
             loop_start = time.time()
             profiler = Profiler()
+            self.controller.tick()
 
             frame = self.screen_capture.get_frame()
             profiler.tick("screen_capture.get_frame")
@@ -140,7 +141,7 @@ class TrackerPuck:
                     profiler.tick("detector.predict_position")
 
                     # Move or do something using detected mouse
-                    self.controller.do(predicted_x, predicted_y)
+                    self.controller.do((predicted_x, predicted_y))
                     profiler.tick("_move_mouse_smooth")
 
                     # Display info (optional - can be removed for maximum performance)
@@ -150,6 +151,8 @@ class TrackerPuck:
                 else:
                     # No motion vector yet, just move to current position
                     self._display_info(center_x, center_y, width, height)
+            else:
+                self.controller.do()
 
             profiler.tick("before end")
             self.frame_count += 1
