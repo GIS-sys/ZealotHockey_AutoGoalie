@@ -23,8 +23,25 @@ class DetectorPuck:
         self.previous_positions = deque(maxlen=self.MAX_LENGTH)
         self.previous_times = deque(maxlen=self.MAX_LENGTH)
 
-    def detect_check_marks(self, image: np.ndarray) -> list:
+    def detect_check_marks(self, image: np.ndarray, bounds_lu: tuple = None, bounds_rd: tuple = None) -> list:
         """Detect yellow check marks in the image"""
+        # Converge bounds if needed
+        if bounds_lu is None:
+            bounds_lu = (0, 0)
+        bounds_lu = (
+            max(0, bounds_lu[0]),
+            max(0, bounds_lu[1]),
+        )
+        if bounds_rd is None:
+            bounds_rd = (image.shape[0], image.shape[1])
+        bounds_rd = (
+            max(0, bounds_rd[0]),
+            max(0, bounds_rd[1]),
+        )
+        image = image[bounds_lu[1]:bounds_rd[1], bounds_lu[0]:bounds_rd[0], :]
+        if image.size == 0:
+            return []
+
         # Convert BGR to HSV
         hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
 
@@ -51,7 +68,7 @@ class DetectorPuck:
                 if 1.5 <= aspect_ratio <= 3.0:
                     center_x = x + w / 2
                     center_y = y + h / 2
-                    detected_marks.append((center_x, center_y, w, h, area))
+                    detected_marks.append((bounds_lu[0] + center_x, bounds_lu[1] + center_y, w, h, area))
 
         return detected_marks
 

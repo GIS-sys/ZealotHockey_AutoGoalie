@@ -1,3 +1,4 @@
+from collections import defaultdict
 import cv2
 import numpy as np
 import pyautogui
@@ -12,17 +13,53 @@ import tkinter as tk
 from PIL import ImageTk, Image
 
 
-DEBUG_OVERLAY = True
+DEBUG_OVERLAY = False
 DEBUG_MOUSE = True
 
 
+class Profiler:
+    start_time: float = None
+    tick_time: float = None
+    end_time: float = None
+
+    total_stats: dict[str, list[float]] = defaultdict(list)
+
+    def __init__(self):
+        self.start()
+
+    def start(self):
+        # print("\nProfiler started")
+        self.start_time = time.time()
+        self.tick_time = self.start_time
+        self.end_time = None
+
+    def tick(self, msg: str):
+        new_tick_time = time.time()
+        # print(msg, new_tick_time - self.tick_time)
+        Profiler.total_stats[msg].append(new_tick_time - self.tick_time)
+        self.tick_time = new_tick_time
+
+    def end(self):
+        self.end_time = time.time()
+        # print(f"Profiler ended: {self.end_time - self.start_time}\n")
+        Profiler.total_stats["Profiler::__end__"].append(self.end_time - self.start_time)
+
+    @classmethod
+    def print_total_stats(cls):
+        print("\nProfiler: total stats")
+        data = []
+        for msg, dtimes in cls.total_stats.items():
+            data.append((sum(dtimes) / len(dtimes), msg, len(dtimes)))
+        data.sort(reverse=True)
+        for avg, msg, amount in data:
+            print(msg, avg, amount)
+
+
 class TrackerPuck:
-    def __init__(self, target_fps: int = 30):
-        self.screen_capture = ScreenCapture(target_fps)
+    def __init__(self):
+        self.screen_capture = ScreenCapture()
         self.detector = DetectorPuck()
         self.running = False
-        self.target_fps = target_fps
-        self.frame_delay = 1.0 / target_fps
 
         # Performance monitoring
         self.frame_count = 0
@@ -52,19 +89,30 @@ class TrackerPuck:
         elapsed = time.time() - self.start_time
         fps = self.frame_count / elapsed if elapsed > 0 else 0
         print(f"\nTracking stopped. Average FPS: {fps:.2f}")
+        Profiler.print_total_stats()
 
     def _tracking_loop(self):
         """Main tracking loop"""
         while self.running:
             loop_start = time.time()
+            profiler = Profiler()
 
             frame = self.screen_capture.get_frame()
+            profiler.tick("screen_capture.get_frame")
             if frame is None:
                 time.sleep(0.001)
                 continue
 
             # Detect check marks
-            check_marks = self.detector.detect_check_marks(frame)
+            check_marks = []
+            if self.detector.previous_positions:
+                last_x, last_y = self.detector.previous_positions[-1]
+                check_marks = self.detector.detect_check_marks(frame, (int(last_x) - 200, int(last_y) - 200), (int(last_x) + 200, int(last_y) + 200))
+            if not check_marks:
+                print("PUCK DETECTION FAILED")
+                check_marks = self.detector.detect_check_marks(frame)
+                print(check_marks)
+            profiler.tick("detector.detect_check_marks")
 
             if check_marks:
                 # Use the largest check mark (by area)
@@ -73,36 +121,40 @@ class TrackerPuck:
 
                 # Update position history
                 self.detector.update_position((center_x, center_y))
+                profiler.tick("detector.update_position")
 
                 # Calculate motion vector
                 motion_vector = self.detector.calculate_motion_vector()
+                profiler.tick("detector.calculate_motion_vector")
 
                 if motion_vector:
                     # Predict position in 0.5 seconds
                     predicted_x, predicted_y = motion_vector.predict_position(
-                        (center_x, center_y), 0.3
+                        (center_x, center_y), 0.1
                     )
                     next_x, next_y = motion_vector.predict_position(
-                        (center_x, center_y), 0.6
+                        (center_x, center_y), 0.4
                     )
+                    profiler.tick("detector.predict_position")
 
                     # Move mouse to predicted position
                     self._move_mouse_smooth(predicted_x, predicted_y)
+                    profiler.tick("_move_mouse_smooth")
 
                     # Display info (optional - can be removed for maximum performance)
                     self._display_info(predicted_x, predicted_y, width, height,
                                        motion_vector, next_x, next_y)
+                    profiler.tick("_display_info")
                 else:
                     # No motion vector yet, just move to current position
                     self._move_mouse_smooth(center_x, center_y)
                     self._display_info(center_x, center_y, width, height)
 
+            profiler.tick("before end")
             self.frame_count += 1
 
-            # Maintain target FPS
-            elapsed = time.time() - loop_start
-            sleep_time = max(0, self.frame_delay - elapsed)
-            time.sleep(sleep_time)
+            profiler.end()
+            self.screen_capture.update_target_fps(self.frame_count / (time.time() - self.start_time))
 
     def _move_mouse_smooth(self, x: float, y: float):
         """Move mouse to position with bounds checking"""
@@ -195,9 +247,9 @@ class TrackerPuck:
 
             legend_items = [
                 # ((0, 255, 0), "Green Box", "Detected Mark"),
-                ((0, 0, 255), "Blue Circle", "Current Puck (+0.3s)"),
+                ((0, 0, 255), "Blue Circle", "Current Puck (+0.1s)"),
                 # ((0, 0, 255), "Red Arrow", "Motion Vector"),
-                ((0, 255, 255), "Cyan Circle", "Predicted (+0.6s)"),
+                ((0, 255, 255), "Cyan Circle", "Predicted (+0.4s)"),
                 # ((255, 255, 0), "Yellow Line", "Prediction Path"),
             ]
 
