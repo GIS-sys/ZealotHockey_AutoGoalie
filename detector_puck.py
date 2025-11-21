@@ -7,9 +7,11 @@ from typing import Optional
 from vector_motion import VectorMotion
 
 
-class DetectorPuck:
-    MAX_LENGTH = 5
+MAX_DETECTOR_QUEUE_LENGTH = 15
+PUCK_DELTA = (0, 20)
 
+
+class DetectorPuck:
     def __init__(self):
         # Define yellow color range in HSV
         self.lower_yellow = np.array([20, 100, 100])
@@ -20,8 +22,8 @@ class DetectorPuck:
         self.max_area = 200
 
         # Motion tracking
-        self.previous_positions = deque(maxlen=self.MAX_LENGTH)
-        self.previous_times = deque(maxlen=self.MAX_LENGTH)
+        self.previous_positions = deque(maxlen=MAX_DETECTOR_QUEUE_LENGTH)
+        self.previous_times = deque(maxlen=MAX_DETECTOR_QUEUE_LENGTH)
 
     def detect_check_marks(self, image: np.ndarray, bounds_lu: tuple = None, bounds_rd: tuple = None) -> list:
         """Detect yellow check marks in the image"""
@@ -68,7 +70,7 @@ class DetectorPuck:
                 if 1.5 <= aspect_ratio <= 3.0:
                     center_x = x + w / 2
                     center_y = y + h / 2
-                    detected_marks.append((bounds_lu[0] + center_x, bounds_lu[1] + center_y, w, h, area))
+                    detected_marks.append((bounds_lu[0] + center_x + PUCK_DELTA[0], bounds_lu[1] + center_y + PUCK_DELTA[1], w, h, area))
 
         return detected_marks
 

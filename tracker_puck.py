@@ -5,16 +5,17 @@ import pyautogui
 import time
 from typing import Optional
 
-from vector_motion import VectorMotion
+from controller import Controller
 from detector_puck import DetectorPuck
 from screen_capture import ScreenCapture
+from vector_motion import VectorMotion
 
 import tkinter as tk
 from PIL import ImageTk, Image
 
 
 DEBUG_OVERLAY = False
-DEBUG_MOUSE = True
+CURRENT_POSITION_DT = 0.05
 
 
 class Profiler:
@@ -59,6 +60,7 @@ class TrackerPuck:
     def __init__(self):
         self.screen_capture = ScreenCapture()
         self.detector = DetectorPuck()
+        self.controller = Controller(self.detector)
         self.running = False
 
         # Performance monitoring
@@ -130,15 +132,15 @@ class TrackerPuck:
                 if motion_vector:
                     # Predict position in 0.5 seconds
                     predicted_x, predicted_y = motion_vector.predict_position(
-                        (center_x, center_y), 0.1
+                        (center_x, center_y), CURRENT_POSITION_DT
                     )
                     next_x, next_y = motion_vector.predict_position(
                         (center_x, center_y), 0.4
                     )
                     profiler.tick("detector.predict_position")
 
-                    # Move mouse to predicted position
-                    self._move_mouse_smooth(predicted_x, predicted_y)
+                    # Move or do something using detected mouse
+                    self.controller.do(predicted_x, predicted_y)
                     profiler.tick("_move_mouse_smooth")
 
                     # Display info (optional - can be removed for maximum performance)
@@ -147,7 +149,6 @@ class TrackerPuck:
                     profiler.tick("_display_info")
                 else:
                     # No motion vector yet, just move to current position
-                    self._move_mouse_smooth(center_x, center_y)
                     self._display_info(center_x, center_y, width, height)
 
             profiler.tick("before end")
@@ -155,24 +156,6 @@ class TrackerPuck:
 
             profiler.end()
             self.screen_capture.update_target_fps(self.frame_count / (time.time() - self.start_time))
-
-    def _move_mouse_smooth(self, x: float, y: float):
-        """Move mouse to position with bounds checking"""
-        if not DEBUG_MOUSE:
-            return
-
-        # Get screen size
-        screen_width, screen_height = pyautogui.size()
-
-        # Ensure coordinates are within screen bounds
-        x = max(1, min(x, screen_width - 2))
-        y = max(1, min(y, screen_height - 2))
-
-        # Move mouse
-        try:
-            pyautogui.moveTo(x, y, duration=0.1, _pause=False)
-        except pyautogui.FailSafeException:
-            print(f"pyautogui.FailSafeException: {x} {y}")
 
     def _display_info(self, x: float, y: float, width: float, height: float,
                     motion_vector: Optional[VectorMotion] = None,
@@ -247,7 +230,7 @@ class TrackerPuck:
 
             legend_items = [
                 # ((0, 255, 0), "Green Box", "Detected Mark"),
-                ((0, 0, 255), "Blue Circle", "Current Puck (+0.1s)"),
+                ((0, 0, 255), "Blue Circle", f"Current Puck (+{CURRENT_POSITION_DT}s)"),
                 # ((0, 0, 255), "Red Arrow", "Motion Vector"),
                 ((0, 255, 255), "Cyan Circle", "Predicted (+0.4s)"),
                 # ((255, 255, 0), "Yellow Line", "Prediction Path"),
