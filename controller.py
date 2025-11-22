@@ -1,12 +1,12 @@
 import keyboard
 import math
 import pyautogui
+import pydirectinput
 import time
 
 from detector_puck import DetectorPuck
 
 
-DEBUG_MOUSE = True
 CREASE_CORNER_TOP = (200, 450)
 CREASE_CORNER_BOT = (200, 700)
 
@@ -14,15 +14,16 @@ CREASE_CORNER_BOT = (200, 700)
 class Controller:
     class KEYBINDS:
         ENABLE_CONTROL = "f1"
-        SET_CORNER_TOP = "f2"
-        SET_CORNER_BOT = "f3"
+        SET_CORNER_AUTO = "f2"
+        SET_CORNER_TOP = "f3"
+        SET_CORNER_BOT = "f4"
 
     def __init__(self, detector: DetectorPuck):
         print("Keybinds:")
         print(f"Press {Controller.KEYBINDS.ENABLE_CONTROL} to enable auto control")
         print(f"Press {Controller.KEYBINDS.SET_CORNER_TOP} to set top gate corner")
         print(f"Press {Controller.KEYBINDS.SET_CORNER_BOT} to set bot gate corner")
-        self.detector = detector
+        self.detector_puck = detector
         self.pressed_keys = set()
         def update_keys(e):
             if e.event_type == keyboard.KEY_DOWN:
@@ -37,40 +38,43 @@ class Controller:
             CREASE_CORNER_TOP = (pyautogui.position()[0], pyautogui.position()[1])
         if Controller.KEYBINDS.SET_CORNER_BOT in self.pressed_keys:
             CREASE_CORNER_BOT = (pyautogui.position()[0], pyautogui.position()[1])
+        if Controller.KEYBINDS.SET_CORNER_AUTO in self.pressed_keys:
+            pass # TODO auto determine corners
 
     def do(self, pos: tuple[float, float] = None):
         if Controller.KEYBINDS.ENABLE_CONTROL not in self.pressed_keys:
             return
 
-        motion_vector = self.detector.calculate_motion_vector()
+        motion_vector = self.detector_puck.calculate_motion_vector()
         if pos is None:
-            self._move_mouse_smooth((CREASE_CORNER_TOP[0] + CREASE_CORNER_BOT[0]) // 2, (CREASE_CORNER_TOP[1] + CREASE_CORNER_BOT[1]) // 2)
+            a = time.time() % 2
+            a = a if a < 1 else 2 - a
+            inter_x = (CREASE_CORNER_TOP[0] * a + CREASE_CORNER_BOT[0] * (1 - a))
+            inter_y = (CREASE_CORNER_TOP[1] * a + CREASE_CORNER_BOT[1] * (1 - a))
+            self._move_mouse(int(inter_x), int(inter_y))
             return
-
-
 
         ix, iy, distance, on_segment = self.find_intersection((CREASE_CORNER_TOP, CREASE_CORNER_BOT), pos, (motion_vector.dx, motion_vector.dy))
-        self._move_mouse_smooth(ix, iy)
-        if on_segment and distance < 1:
-            pyautogui.rightClick()
+        if on_segment:
+            if distance < 2:
+                self._move_mouse(ix, iy)
+                #pydirectinput.move(int(ix), int(iy))
+                pydirectinput.mouseDown(button=pyautogui.RIGHT)
+                #time.sleep(0.01)
+                pydirectinput.mouseUp(button=pyautogui.RIGHT)
+                pydirectinput.keyDown("q")
+                #time.sleep(0.01)
+                pydirectinput.keyUp("q")
+                pydirectinput.keyDown("s")
+                #time.sleep(0.01)
+                pydirectinput.keyUp("s")
 
-    def _move_mouse_smooth(self, x: float, y: float):
+    def _move_mouse(self, x: float, y: float):
         """Move mouse to position with bounds checking"""
-        if not DEBUG_MOUSE:
-            return
-
-        # Get screen size
         screen_width, screen_height = pyautogui.size()
-
-        # Ensure coordinates are within screen bounds
-        x = max(1, min(x, screen_width - 2))
-        y = max(1, min(y, screen_height - 2))
-
-        # Move mouse
-        try:
-            pyautogui.moveTo(x, y, duration=0.1, _pause=False)
-        except pyautogui.FailSafeException:
-            print(f"pyautogui.FailSafeException: {x} {y}")
+        x = max(50, min(x, screen_width - 50))
+        y = max(50, min(y, screen_height - 50))
+        pydirectinput.moveTo(int(x), int(y))
 
     @staticmethod
     def find_intersection(line: tuple[tuple[float, float], tuple[float, float]], point: tuple[float, float], speed: tuple[float, float]) -> tuple[float, float, float, bool]:

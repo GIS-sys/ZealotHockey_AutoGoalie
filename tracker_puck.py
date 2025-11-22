@@ -59,8 +59,8 @@ class Profiler:
 class TrackerPuck:
     def __init__(self):
         self.screen_capture = ScreenCapture()
-        self.detector = DetectorPuck()
-        self.controller = Controller(self.detector)
+        self.detector_puck = DetectorPuck()
+        self.controller = Controller(self.detector_puck)
         self.running = False
 
         # Performance monitoring
@@ -108,12 +108,12 @@ class TrackerPuck:
 
             # Detect check marks
             check_marks = []
-            if self.detector.previous_positions:
-                last_x, last_y = self.detector.previous_positions[-1]
-                check_marks = self.detector.detect_check_marks(frame, (int(last_x) - 200, int(last_y) - 200), (int(last_x) + 200, int(last_y) + 200))
+            if self.detector_puck.previous_positions:
+                last_x, last_y = self.detector_puck.previous_positions[-1]
+                check_marks = self.detector_puck.detect_check_marks(frame, (int(last_x) - 200, int(last_y) - 200), (int(last_x) + 200, int(last_y) + 200))
             if not check_marks:
                 print("PUCK DETECTION FAILED")
-                check_marks = self.detector.detect_check_marks(frame)
+                check_marks = self.detector_puck.detect_check_marks(frame)
                 print(check_marks)
             profiler.tick("detector.detect_check_marks")
 
@@ -123,11 +123,11 @@ class TrackerPuck:
                 center_x, center_y, width, height, area = largest_mark
 
                 # Update position history
-                self.detector.update_position((center_x, center_y))
+                self.detector_puck.update_position((center_x, center_y))
                 profiler.tick("detector.update_position")
 
                 # Calculate motion vector
-                motion_vector = self.detector.calculate_motion_vector()
+                motion_vector = self.detector_puck.calculate_motion_vector()
                 profiler.tick("detector.calculate_motion_vector")
 
                 if motion_vector:
